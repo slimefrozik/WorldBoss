@@ -47,15 +47,50 @@ bosses:
 rewards:
   money: 50
 
+loot-tables:
+  zombie:
+    rolls: 2
+    entries:
+      - material: DIAMOND
+        weight: 70
+        amount:
+          min: 1
+          max: 2
+        metadata:
+          name: "&bОсколок титана"
+          lore:
+            - "&7Добыча с мирового босса"
+            - "&8Тип: ZOMBIE"
+        flags:
+          - HIDE_ATTRIBUTES
+      - material: EMERALD
+        weight: 30
+        amount:
+          min: 3
+          max: 6
+        metadata:
+          name: "&aИзумрудный клад"
+        unique:
+          event-item: true
 
-database:
-  type: sqlite # sqlite or mysql
-  sqlite:
-    file: economy.db
-  mysql:
-    host: localhost
-    port: 3306
-    database: worldboss
-    username: root
-    password: change_me
-    ssl: false
+  fire:
+    rolls: 2
+    entries:
+      - material: BLAZE_ROD
+        weight: 65
+        amount:
+          min: 1
+          max: 3
+        metadata:
+          name: "&6Огненный жезл"
+          lore:
+            - "&7Трофей с огненного босса"
+        flags:
+          - HIDE_ATTRIBUTES
+      - material: MAGMA_CREAM
+        weight: 35
+        amount:
+          min: 2
+          max: 5
+        unique:
+          event-item: true
