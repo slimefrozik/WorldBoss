@@ -1,0 +1,12 @@
+name: WorldBoss
+version: 1.0.0
+main: com.worldboss.WorldBossPlugin
+api-version: '1.21'
+author: Codex
+commands:
+  boss:
+    description: World boss controls
+    usage: /boss <ready|exit|claim|info|skip|spawn|respawn>
+permissions:
+  worldboss.admin:
+    default: op

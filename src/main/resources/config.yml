@@ -1,0 +1,45 @@
+schedule:
+  second-day: WEDNESDAY
+  max-per-week: 2
+
+voting:
+  min-ready: 4
+
+spawn:
+  world: world
+  min-distance: 1000
+  max-distance: 8000
+  max-attempts: 120
+  lenient-after: 80
+
+event:
+  duration-minutes: 60
+
+combat:
+  respawn-lock-minutes: 10
+
+boss:
+  behavior:
+    leash-radius: 50
+    aoe-radius: 8
+    aoe-damage: 6
+    minions-per-wave: 2
+    temp-block-ttl-seconds: 20
+
+bosses:
+  next-type: zombie
+  zombie:
+    health: 600
+    allowed-biomes:
+      - "!*_OCEAN"
+      - "!RIVER"
+  fire:
+    health: 600
+    allowed-biomes:
+      - DESERT
+      - BADLANDS
+      - ERODED_BADLANDS
+      - WOODED_BADLANDS
+
+rewards:
+  money: 50
