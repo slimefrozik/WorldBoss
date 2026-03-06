@@ -65,8 +65,13 @@ public class BossCommand implements CommandExecutor, TabCompleter {
             }
             case "spawn" -> {
                 if (!ensureAdmin(sender)) return true;
+                boolean hadActiveBoss = manager.getActiveBoss() != null;
                 boolean started = manager.startEvent(true);
-                sender.sendMessage(Component.text(started ? "Событие запущено." : "Не удалось запустить событие.", started ? NamedTextColor.GREEN : NamedTextColor.RED));
+                if (started) {
+                    sender.sendMessage(Component.text(hadActiveBoss ? "Активный босс удалён, событие перезапущено." : "Событие запущено.", NamedTextColor.GREEN));
+                } else {
+                    sender.sendMessage(Component.text("Не удалось запустить событие (проверьте мир и точку спавна).", NamedTextColor.RED));
+                }
             }
             case "respawn" -> {
                 if (!ensureAdmin(sender)) return true;
