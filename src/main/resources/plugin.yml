@@ -9,6 +9,12 @@ commands:
   boss:
     description: World boss controls
     usage: /boss <ready|exit|claim|info|skip|spawn|respawn>
+  money:
+    description: Show balance and transfer money
+    usage: /money [send <nick> <count>]
+  balance:
+    description: Show your balance
+    usage: /balance
 permissions:
   worldboss.admin:
     default: op
