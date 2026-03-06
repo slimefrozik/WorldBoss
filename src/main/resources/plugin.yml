@@ -1,5 +1,7 @@
 name: WorldBoss
 version: 1.0.0
+# Compatibility: plugin version 1.0.0 targets Paper 1.21.10
+# Runtime target: Paper 1.21.10 + JDK 21
 main: com.worldboss.WorldBossPlugin
 api-version: '1.21'
 author: Codex
