@@ -43,3 +43,16 @@ bosses:
 
 rewards:
   money: 50
+
+
+database:
+  type: sqlite # sqlite or mysql
+  sqlite:
+    file: economy.db
+  mysql:
+    host: localhost
+    port: 3306
+    database: worldboss
+    username: root
+    password: change_me
+    ssl: false
