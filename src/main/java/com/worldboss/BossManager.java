@@ -16,6 +16,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
+import com.worldboss.economy.EconomyService;
 import java.io.File;
 import java.io.IOException;
 import java.time.DayOfWeek;
@@ -27,6 +28,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class BossManager {
     public static final String BOSS_META = "worldboss_system";
     private final JavaPlugin plugin;
+    private final EconomyService economyService;
     private final Set<UUID> readyPlayers = new HashSet<>();
     private final Map<UUID, Long> respawnBlockedUntil = new HashMap<>();
     private final Map<UUID, List<ItemStack>> pendingClaims = new HashMap<>();
@@ -37,8 +39,9 @@ public class BossManager {
     private int spawnsThisWeek = 0;
     private int weekIndex = -1;
 
-    public BossManager(JavaPlugin plugin) {
+    public BossManager(JavaPlugin plugin, EconomyService economyService) {
         this.plugin = plugin;
+        this.economyService = economyService;
     }
 
     public void startTickTasks() {
@@ -263,7 +266,13 @@ public class BossManager {
     private void rewardParticipants() {
         int coins = plugin.getConfig().getInt("rewards.money", 50);
         for (UUID participant : activeBoss.participants) {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "money add " + Bukkit.getOfflinePlayer(participant).getName() + " " + coins);
+            String playerName = Optional.ofNullable(Bukkit.getOfflinePlayer(participant).getName())
+                    .orElse(participant.toString().substring(0, 8));
+            try {
+                economyService.addBalance(participant, playerName, coins);
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to reward " + playerName + ": " + e.getMessage());
+            }
             pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).add(buildLoot(activeBoss.bossType));
         }
     }
