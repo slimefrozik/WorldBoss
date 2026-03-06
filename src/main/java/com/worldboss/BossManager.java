@@ -3,6 +3,7 @@ package com.worldboss;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
@@ -19,6 +20,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
+import com.worldboss.economy.EconomyService;
 import java.io.File;
 import java.io.IOException;
 import java.time.DayOfWeek;
@@ -30,6 +32,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class BossManager {
     public static final String BOSS_META = "worldboss_system";
     private final JavaPlugin plugin;
+    private final EconomyService economyService;
     private final Set<UUID> readyPlayers = new HashSet<>();
     private final Map<UUID, Long> respawnBlockedUntil = new HashMap<>();
     private final Map<UUID, List<ItemStack>> pendingClaims = new HashMap<>();
@@ -40,8 +43,9 @@ public class BossManager {
     private int spawnsThisWeek = 0;
     private int weekIndex = -1;
 
-    public BossManager(JavaPlugin plugin) {
+    public BossManager(JavaPlugin plugin, EconomyService economyService) {
         this.plugin = plugin;
+        this.economyService = economyService;
     }
 
     public void startTickTasks() {
@@ -437,6 +441,25 @@ public class BossManager {
     public void lockRespawn(Player player) {
         long until = System.currentTimeMillis() + plugin.getConfig().getLong("combat.respawn-lock-minutes", 10L) * 60_000L;
         respawnBlockedUntil.put(player.getUniqueId(), until);
+    }
+
+    public void unlockRespawn(UUID playerId) {
+        respawnBlockedUntil.remove(playerId);
+    }
+
+    public World getRespawnLockWaitingWorld() {
+        FileConfiguration config = plugin.getConfig();
+        String worldName = config.getString("combat.respawn-lock.waiting-world", "world");
+        return Bukkit.getWorld(worldName);
+    }
+
+    public boolean shouldKickIfWaitingWorldMissing() {
+        return plugin.getConfig().getBoolean("combat.respawn-lock.kick-if-waiting-world-missing", true);
+    }
+
+    public String getRespawnLockKickMessage(UUID playerId) {
+        long left = getRespawnBlockSecondsLeft(playerId);
+        return "Выбывание временно заблокировано. До разблокировки осталось " + left + " сек.";
     }
 
     public boolean isRespawnBlocked(UUID playerId) {
