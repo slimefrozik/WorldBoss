@@ -88,12 +88,14 @@ public class BossManager {
 
     public boolean startEvent(boolean forced) {
         rotateWeekCounter();
+        if (forced && activeBoss != null) {
+            removeBoss(false);
+        }
         if (!forced) {
             if (activeBoss != null) return false;
             if (!isSpawnDayAllowed() || isSkippedToday()) return false;
             if (spawnsThisWeek >= plugin.getConfig().getInt("schedule.max-per-week", 2)) return false;
         }
-        if (activeBoss != null && !forced) return false;
 
         World world = Bukkit.getWorld(plugin.getConfig().getString("spawn.world", "world"));
         if (world == null) return false;
