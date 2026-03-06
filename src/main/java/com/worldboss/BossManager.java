@@ -10,9 +10,11 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.*;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -377,15 +379,121 @@ public class BossManager {
         int maxCoins = plugin.getConfig().getInt("bosses." + type.id() + ".reward-coins-max", 50);
         int coins = ThreadLocalRandom.current().nextInt(minCoins, maxCoins + 1);
         for (UUID participant : activeBoss.participants) {
-            String playerName = Optional.ofNullable(Bukkit.getOfflinePlayer(participant).getName())
-                    .orElse(participant.toString().substring(0, 8));
-            try {
-                economyService.addBalance(participant, playerName, coins);
-            } catch (Exception e) {
-                plugin.getLogger().warning("Failed to reward " + playerName + ": " + e.getMessage());
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "money add " + Bukkit.getOfflinePlayer(participant).getName() + " " + coins);
+            pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).addAll(buildLoot(activeBoss.bossType));
+        }
+    }
+
+    private List<ItemStack> buildLoot(BossType type) {
+        String basePath = "loot-tables." + type.id();
+        ConfigurationSection table = plugin.getConfig().getConfigurationSection(basePath);
+        if (table == null) {
+            return List.of(new ItemStack(type.lootMaterial(), 1));
+        }
+
+        List<Map<?, ?>> rawEntries = table.getMapList("entries");
+        if (rawEntries.isEmpty()) {
+            return List.of(new ItemStack(type.lootMaterial(), 1));
+        }
+
+        int rolls = Math.max(1, table.getInt("rolls", 1));
+        List<LootEntry> entries = new ArrayList<>();
+        int totalWeight = 0;
+        for (Map<?, ?> rawEntry : rawEntries) {
+            LootEntry entry = parseLootEntry(rawEntry);
+            if (entry == null) continue;
+            entries.add(entry);
+            totalWeight += entry.weight();
+        }
+
+        if (entries.isEmpty() || totalWeight <= 0) {
+            return List.of(new ItemStack(type.lootMaterial(), 1));
+        }
+
+        List<ItemStack> items = new ArrayList<>();
+        for (int i = 0; i < rolls; i++) {
+            LootEntry chosen = chooseLoot(entries, totalWeight);
+            if (chosen == null) continue;
+            int amount = ThreadLocalRandom.current().nextInt(chosen.minAmount(), chosen.maxAmount() + 1);
+            ItemStack item = new ItemStack(chosen.material(), amount);
+            applyMetadata(item, chosen);
+            items.add(item);
+        }
+        return items;
+    }
+
+    private LootEntry parseLootEntry(Map<?, ?> rawEntry) {
+        String materialName = String.valueOf(rawEntry.getOrDefault("material", "AIR")).toUpperCase(Locale.ROOT);
+        Material material = Material.matchMaterial(materialName);
+        if (material == null || material.isAir()) return null;
+
+        int weight = Math.max(1, parseInt(rawEntry.get("weight"), 1));
+
+        int min = 1;
+        int max = 1;
+        Object amountObj = rawEntry.get("amount");
+        if (amountObj instanceof Map<?, ?> amountMap) {
+            min = Math.max(1, parseInt(amountMap.get("min"), 1));
+            max = Math.max(min, parseInt(amountMap.get("max"), min));
+        }
+
+        String name = null;
+        List<String> lore = List.of();
+        Object metadataObj = rawEntry.get("metadata");
+        if (metadataObj instanceof Map<?, ?> metaMap) {
+            Object rawName = metaMap.get("name");
+            if (rawName != null) name = ChatColor.translateAlternateColorCodes('&', rawName.toString());
+            Object rawLore = metaMap.get("lore");
+            if (rawLore instanceof List<?> loreList) {
+                List<String> translated = new ArrayList<>();
+                for (Object line : loreList) {
+                    translated.add(ChatColor.translateAlternateColorCodes('&', String.valueOf(line)));
+                }
+                lore = translated;
+            }
+        }
+
+        Set<ItemFlag> flags = EnumSet.noneOf(ItemFlag.class);
+        Object flagsObj = rawEntry.get("flags");
+        if (flagsObj instanceof List<?> list) {
+            for (Object flagObj : list) {
+                try {
+                    flags.add(ItemFlag.valueOf(String.valueOf(flagObj).toUpperCase(Locale.ROOT)));
+                } catch (IllegalArgumentException ignored) {
+                }
             }
             pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).addAll(buildLoot(type));
         }
+
+        Map<String, String> unique = new HashMap<>();
+        Object uniqueObj = rawEntry.get("unique");
+        if (uniqueObj instanceof Map<?, ?> uniqueMap) {
+            for (Map.Entry<?, ?> entry : uniqueMap.entrySet()) {
+                unique.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+            }
+        }
+
+        return new LootEntry(material, weight, min, max, name, lore, flags, unique);
+    }
+
+    private int parseInt(Object value, int fallback) {
+        if (value instanceof Number number) return number.intValue();
+        if (value == null) return fallback;
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
+    }
+
+    private LootEntry chooseLoot(List<LootEntry> entries, int totalWeight) {
+        int roll = ThreadLocalRandom.current().nextInt(totalWeight);
+        int cursor = 0;
+        for (LootEntry entry : entries) {
+            cursor += entry.weight();
+            if (roll < cursor) return entry;
+        }
+        return entries.get(entries.size() - 1);
     }
 
     private List<ItemStack> buildLoot(BossType type) {
@@ -435,6 +543,7 @@ public class BossManager {
     }
 
     private void publishDamageTop() {
+
         List<Map.Entry<UUID, Double>> top = new ArrayList<>(activeBoss.damage.entrySet());
         top.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
 
@@ -451,12 +560,15 @@ public class BossManager {
         if (loot == null || loot.isEmpty()) {
             return "У вас нет наград.";
         }
-        for (ItemStack item : loot) {
-            if (player.getInventory().firstEmpty() == -1) {
-                return "Инвентарь заполнен.";
-            }
-            player.getInventory().addItem(item);
+        if (player.getInventory().firstEmpty() == -1) {
+            return "Инвентарь заполнен.";
         }
+
+        HashMap<Integer, ItemStack> leftovers = player.getInventory().addItem(loot.toArray(new ItemStack[0]));
+        if (!leftovers.isEmpty()) {
+            return "Инвентарь заполнен.";
+        }
+
         loot.clear();
         return "Награда выдана.";
     }
@@ -601,6 +713,10 @@ public class BossManager {
         if (n.contains("CHEST") || n.contains("BED") || n.contains("FURNACE") || n.contains("CRAFTING_TABLE")) return true;
         if (n.contains("PLANKS") || n.contains("BRICKS") || n.contains("CONCRETE") || n.contains("GLASS") || n.contains("WOOL")) return true;
         return material.isInteractable();
+    }
+
+    private record LootEntry(Material material, int weight, int minAmount, int maxAmount, String displayName,
+                             List<String> lore, Set<ItemFlag> flags, Map<String, String> unique) {
     }
 
     public void saveState() {
