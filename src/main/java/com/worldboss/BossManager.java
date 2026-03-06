@@ -3,6 +3,7 @@ package com.worldboss;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
@@ -303,6 +304,25 @@ public class BossManager {
     public void lockRespawn(Player player) {
         long until = System.currentTimeMillis() + plugin.getConfig().getLong("combat.respawn-lock-minutes", 10L) * 60_000L;
         respawnBlockedUntil.put(player.getUniqueId(), until);
+    }
+
+    public void unlockRespawn(UUID playerId) {
+        respawnBlockedUntil.remove(playerId);
+    }
+
+    public World getRespawnLockWaitingWorld() {
+        FileConfiguration config = plugin.getConfig();
+        String worldName = config.getString("combat.respawn-lock.waiting-world", "world");
+        return Bukkit.getWorld(worldName);
+    }
+
+    public boolean shouldKickIfWaitingWorldMissing() {
+        return plugin.getConfig().getBoolean("combat.respawn-lock.kick-if-waiting-world-missing", true);
+    }
+
+    public String getRespawnLockKickMessage(UUID playerId) {
+        long left = getRespawnBlockSecondsLeft(playerId);
+        return "Выбывание временно заблокировано. До разблокировки осталось " + left + " сек.";
     }
 
     public boolean isRespawnBlocked(UUID playerId) {
