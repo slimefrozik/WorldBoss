@@ -17,6 +17,9 @@ event:
 
 combat:
   respawn-lock-minutes: 10
+  respawn-lock:
+    waiting-world: world_waiting
+    kick-if-waiting-world-missing: true
 
 boss:
   behavior:
