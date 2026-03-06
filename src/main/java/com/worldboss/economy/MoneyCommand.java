@@ -3,7 +3,6 @@ package com.worldboss.economy;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -71,15 +70,14 @@ public class MoneyCommand implements CommandExecutor, TabCompleter {
         }
 
         EconomyAccount target = economyService.findByName(args[1]).orElseGet(() -> {
-            OfflinePlayer player = Bukkit.getOfflinePlayer(args[1]);
-            if (player.getUniqueId() == null) {
+            Player onlinePlayer = Bukkit.getPlayerExact(args[1]);
+            if (onlinePlayer == null || onlinePlayer.getName() == null || onlinePlayer.getUniqueId() == null) {
                 return null;
             }
-            String name = player.getName() != null ? player.getName() : args[1];
-            return new EconomyAccount(player.getUniqueId(), name, 0);
+            return new EconomyAccount(onlinePlayer.getUniqueId(), onlinePlayer.getName(), 0);
         });
         if (target == null) {
-            from.sendMessage(Component.text("Игрок не найден.", NamedTextColor.RED));
+            from.sendMessage(Component.text("Игрок не найден в экономике.", NamedTextColor.RED));
             return;
         }
 
