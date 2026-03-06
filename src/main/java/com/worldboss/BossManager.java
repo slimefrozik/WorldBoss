@@ -390,12 +390,12 @@ public class BossManager {
         String basePath = "loot-tables." + type.id();
         ConfigurationSection table = plugin.getConfig().getConfigurationSection(basePath);
         if (table == null) {
-            return List.of(new ItemStack(type.lootMaterial(), 1));
+            return buildDefaultLoot(type);
         }
 
         List<Map<?, ?>> rawEntries = table.getMapList("entries");
         if (rawEntries.isEmpty()) {
-            return List.of(new ItemStack(type.lootMaterial(), 1));
+            return buildDefaultLoot(type);
         }
 
         int rolls = Math.max(1, table.getInt("rolls", 1));
@@ -409,7 +409,7 @@ public class BossManager {
         }
 
         if (entries.isEmpty() || totalWeight <= 0) {
-            return List.of(new ItemStack(type.lootMaterial(), 1));
+            return buildDefaultLoot(type);
         }
 
         List<ItemStack> items = new ArrayList<>();
@@ -464,7 +464,6 @@ public class BossManager {
                 } catch (IllegalArgumentException ignored) {
                 }
             }
-            pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).addAll(buildLoot(type));
         }
 
         Map<String, String> unique = new HashMap<>();
@@ -498,7 +497,7 @@ public class BossManager {
         return entries.get(entries.size() - 1);
     }
 
-    private List<ItemStack> buildLoot(BossType type) {
+    private List<ItemStack> buildDefaultLoot(BossType type) {
         List<ItemStack> drops = new ArrayList<>();
         drops.add(new ItemStack(type.lootMaterial(), 1));
 
