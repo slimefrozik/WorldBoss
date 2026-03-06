@@ -24,6 +24,7 @@ import org.bukkit.util.Vector;
 import com.worldboss.economy.EconomyService;
 import java.io.File;
 import java.io.IOException;
+import java.sql.SQLException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.WeekFields;
@@ -381,9 +382,29 @@ public class BossManager {
         int maxCoins = plugin.getConfig().getInt("bosses." + type.id() + ".reward-coins-max", 50);
         int coins = ThreadLocalRandom.current().nextInt(minCoins, maxCoins + 1);
         for (UUID participant : activeBoss.participants) {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "money add " + Bukkit.getOfflinePlayer(participant).getName() + " " + coins);
-            pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).addAll(buildLoot(activeBoss.bossType));
+            String participantName = resolveParticipantName(participant);
+            try {
+                economyService.addBalance(participant, participantName, coins);
+            } catch (SQLException exception) {
+                plugin.getLogger().severe("Failed to add coins for participant " + participant + " (" + participantName + "): " + exception.getMessage());
+                continue;
+            }
+            pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).addAll(buildLoot(type));
         }
+    }
+
+    private String resolveParticipantName(UUID participantId) {
+        Player onlinePlayer = Bukkit.getPlayer(participantId);
+        if (onlinePlayer != null && onlinePlayer.getName() != null) {
+            return onlinePlayer.getName();
+        }
+
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(participantId);
+        if (offlinePlayer.getName() != null) {
+            return offlinePlayer.getName();
+        }
+
+        return participantId.toString().substring(0, 8);
     }
 
     private List<ItemStack> buildLoot(BossType type) {
