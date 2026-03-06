@@ -24,54 +24,57 @@ combat:
 boss:
   behavior:
     leash-radius: 50
-    aoe-radius: 8
-    aoe-damage: 6
-    minions-per-wave: 2
-    temp-block-ttl-seconds: 20
 
 bosses:
-  next-type: zombie
-  zombie:
-    health: 600
+  next-type: zombie_giant
+  zombie_giant:
+    health: 1200
+    reward-coins-min: 50
+    reward-coins-max: 70
     allowed-biomes:
-      - "!*_OCEAN"
-      - "!RIVER"
-  fire:
-    health: 600
+      - PLAINS
+      - FOREST
+      - TAIGA
+      - SAVANNA
+  ifrit_titan:
+    health: 500
+    reward-coins-min: 60
+    reward-coins-max: 80
     allowed-biomes:
       - DESERT
       - BADLANDS
       - ERODED_BADLANDS
       - WOODED_BADLANDS
-
-rewards:
-  money: 50
-
-loot-tables:
-  zombie:
-    rolls: 2
-    entries:
-      - material: DIAMOND
-        weight: 70
-        amount:
-          min: 1
-          max: 2
-        metadata:
-          name: "&bОсколок титана"
-          lore:
-            - "&7Добыча с мирового босса"
-            - "&8Тип: ZOMBIE"
-        flags:
-          - HIDE_ATTRIBUTES
-      - material: EMERALD
-        weight: 30
-        amount:
-          min: 3
-          max: 6
-        metadata:
-          name: "&aИзумрудный клад"
-        unique:
-          event-item: true
+  raid_archmage:
+    health: 650
+    reward-coins-min: 60
+    reward-coins-max: 60
+    allowed-biomes:
+      - PLAINS
+      - FOREST
+      - DARK_FOREST
+  giant_phantom:
+    health: 800
+    reward-coins-min: 50
+    reward-coins-max: 50
+    allowed-biomes:
+      - "!*_OCEAN"
+      - "!RIVER"
+  giant_shulker:
+    health: 850
+    reward-coins-min: 70
+    reward-coins-max: 70
+    allowed-biomes:
+      - "!*_OCEAN"
+      - "!RIVER"
+  forest_guardian:
+    health: 1100
+    reward-coins-min: 0
+    reward-coins-max: 0
+    allowed-biomes:
+      - FOREST
+      - BIRCH_FOREST
+      - JUNGLE
 
   fire:
     rolls: 2

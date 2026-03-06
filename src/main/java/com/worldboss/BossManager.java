@@ -19,6 +19,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Vector;
 
 import com.worldboss.economy.EconomyService;
 import java.io.File;
@@ -124,7 +125,7 @@ public class BossManager {
     private void spawnBoss(BossType bossType, Location spawn) {
         World world = spawn.getWorld();
         LivingEntity entity = (LivingEntity) world.spawnEntity(spawn, bossType.entityType());
-        entity.customName(Component.text("Мировой Босс: " + bossType.id(), NamedTextColor.RED));
+        entity.customName(Component.text("Мировой Босс: " + bossType.displayName(), NamedTextColor.RED));
         entity.setCustomNameVisible(true);
         entity.setPersistent(true);
         entity.setRemoveWhenFarAway(false);
@@ -191,6 +192,11 @@ public class BossManager {
             boss.teleport(activeBoss.spawnLocation);
         }
 
+        if (activeBoss.bossType == BossType.FOREST_GUARDIAN && boss.isInWaterOrBubbleColumn()) {
+            boss.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, 20 * 3, 2, false, false, true));
+            return;
+        }
+
         if (boss.isInWaterOrBubbleColumn() || boss.getVelocity().lengthSquared() < 0.0001) {
             boss.teleport(activeBoss.spawnLocation);
             boss.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 20 * 15, 0, false, false, true));
@@ -202,24 +208,124 @@ public class BossManager {
         LivingEntity boss = getBossEntity();
         if (boss == null || boss.isDead()) return;
 
-        double aoe = plugin.getConfig().getDouble("boss.behavior.aoe-radius", 8.0);
-        double damage = plugin.getConfig().getDouble("boss.behavior.aoe-damage", 6.0);
-        boss.getWorld().getNearbyPlayers(boss.getLocation(), aoe).forEach(player -> {
-            player.damage(damage, boss);
-            registerParticipant(player.getUniqueId());
-        });
+        switch (activeBoss.bossType) {
+            case ZOMBIE_GIANT -> runZombieGiantAbilities(boss);
+            case IFRIT_TITAN -> runIfritTitanAbilities(boss);
+            case RAID_ARCHMAGE -> runRaidArchmageAbilities(boss);
+            case GIANT_PHANTOM -> runGiantPhantomAbilities(boss);
+            case GIANT_SHULKER -> runGiantShulkerAbilities(boss);
+            case FOREST_GUARDIAN -> runForestGuardianAbilities(boss);
+        }
+    }
 
-        int minions = plugin.getConfig().getInt("boss.behavior.minions-per-wave", 2);
-        for (int i = 0; i < minions; i++) {
-            Location loc = boss.getLocation().clone().add(ThreadLocalRandom.current().nextDouble(-4, 4), 0, ThreadLocalRandom.current().nextDouble(-4, 4));
-            loc.setY(loc.getWorld().getHighestBlockYAt(loc));
-            Entity minion = loc.getWorld().spawnEntity(loc, EntityType.ZOMBIE);
-            if (minion instanceof Mob mob) {
-                mob.setTarget(boss.getWorld().getNearestPlayer(loc, 20));
-            }
+    private void runZombieGiantAbilities(LivingEntity boss) {
+        dealAoeDamage(boss, 8.0, 14.0);
+        summonMinions(boss, EntityType.ZOMBIE, 5, 8, 10.0);
+        launchProjectile(boss, EntityType.SMALL_FIREBALL, 1.0);
+        double hpPart = boss.getHealth() / boss.getAttribute(Attribute.MAX_HEALTH).getValue();
+        int phase = (int) ((1.0 - hpPart) / 0.25);
+        if (phase > 0) {
+            boss.addPotionEffect(new PotionEffect(PotionEffectType.INCREASE_DAMAGE, 20 * 15, Math.min(3, phase), false, false, true));
+        }
+    }
+
+    private void runIfritTitanAbilities(LivingEntity boss) {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int i = 0; i < random.nextInt(10, 16); i++) {
+            Location at = boss.getLocation().clone().add(random.nextDouble(-8, 8), 12, random.nextDouble(-8, 8));
+            Fireball rain = (Fireball) boss.getWorld().spawnEntity(at, EntityType.FIREBALL);
+            rain.setShooter(boss);
+            rain.setYield(0f);
+            rain.setIsIncendiary(false);
+            rain.setDirection(new Vector(0, -1, 0));
         }
 
         createTemporaryBlocks(boss.getLocation());
+        launchProjectile(boss, EntityType.SMALL_FIREBALL, 1.8);
+        if (random.nextDouble() < 0.35) {
+            boss.setVelocity(new Vector(0, 0.9, 0));
+        }
+    }
+
+    private void runRaidArchmageAbilities(LivingEntity boss) {
+        summonMinions(boss, EntityType.PILLAGER, 3, 5, 16.0);
+        for (int i = 0; i < 4; i++) {
+            Location fangsAt = boss.getLocation().clone().add(ThreadLocalRandom.current().nextDouble(-4, 4), 0, ThreadLocalRandom.current().nextDouble(-4, 4));
+            boss.getWorld().spawnEntity(fangsAt, EntityType.EVOKER_FANGS);
+        }
+        boss.addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, 20 * 8, 1, false, false, true));
+        long raidersAlive = boss.getWorld().getNearbyEntities(boss.getLocation(), 20, 12, 20).stream()
+                .filter(entity -> entity.getType() == EntityType.PILLAGER)
+                .count();
+        if (raidersAlive == 0) {
+            boss.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 20 * 8, 1, false, false, true));
+        }
+    }
+
+    private void runGiantPhantomAbilities(LivingEntity boss) {
+        dealAoeDamage(boss, 10.0, 10.0);
+        summonMinions(boss, EntityType.PHANTOM, 2, 4, 18.0);
+        boss.getWorld().getNearbyPlayers(boss.getLocation(), 25).forEach(player -> {
+            player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 20 * 4, 0, false, false, true));
+            registerParticipant(player.getUniqueId());
+        });
+        if (ThreadLocalRandom.current().nextDouble() < 0.35) {
+            Location blink = activeBoss.spawnLocation.clone().add(ThreadLocalRandom.current().nextDouble(-14, 14), 20, ThreadLocalRandom.current().nextDouble(-14, 14));
+            boss.teleport(blink);
+        }
+    }
+
+    private void runGiantShulkerAbilities(LivingEntity boss) {
+        for (int i = 0; i < 4; i++) {
+            launchProjectile(boss, EntityType.SHULKER_BULLET, 1.0);
+        }
+        summonMinions(boss, EntityType.SHULKER, 1, 2, 12.0);
+        boss.getWorld().getNearbyPlayers(boss.getLocation(), 12).forEach(player -> {
+            player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 20 * 3, 1, false, false, true));
+            registerParticipant(player.getUniqueId());
+        });
+        if (ThreadLocalRandom.current().nextDouble() < 0.25) {
+            Location blink = activeBoss.spawnLocation.clone().add(ThreadLocalRandom.current().nextDouble(-8, 8), ThreadLocalRandom.current().nextDouble(2, 8), ThreadLocalRandom.current().nextDouble(-8, 8));
+            boss.teleport(blink);
+        }
+    }
+
+    private void runForestGuardianAbilities(LivingEntity boss) {
+        dealAoeDamage(boss, 8.0, 12.0);
+        boss.getWorld().getNearbyPlayers(boss.getLocation(), 8).forEach(player -> {
+            Vector knockback = player.getLocation().toVector().subtract(boss.getLocation().toVector()).normalize().multiply(1.2).setY(0.4);
+            player.setVelocity(knockback);
+            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, 20 * 5, 1, false, false, true));
+        });
+        launchProjectile(boss, EntityType.SNOWBALL, 1.5);
+    }
+
+    private void dealAoeDamage(LivingEntity boss, double radius, double damage) {
+        boss.getWorld().getNearbyPlayers(boss.getLocation(), radius).forEach(player -> {
+            player.damage(damage, boss);
+            registerParticipant(player.getUniqueId());
+        });
+    }
+
+    private void summonMinions(LivingEntity boss, EntityType type, int minCount, int maxCount, double aggroRadius) {
+        int count = ThreadLocalRandom.current().nextInt(minCount, maxCount + 1);
+        for (int i = 0; i < count; i++) {
+            Location loc = boss.getLocation().clone().add(ThreadLocalRandom.current().nextDouble(-5, 5), 0, ThreadLocalRandom.current().nextDouble(-5, 5));
+            loc.setY(loc.getWorld().getHighestBlockYAt(loc));
+            Entity minion = loc.getWorld().spawnEntity(loc, type);
+            if (minion instanceof Mob mob) {
+                mob.setTarget(boss.getWorld().getNearestPlayer(loc, aggroRadius));
+            }
+        }
+    }
+
+    private void launchProjectile(LivingEntity boss, EntityType type, double speed) {
+        Player target = boss.getWorld().getNearestPlayer(boss.getLocation(), 30);
+        if (target == null) return;
+        Projectile projectile = (Projectile) boss.getWorld().spawnEntity(boss.getEyeLocation().add(0, 0.2, 0), type);
+        projectile.setShooter(boss);
+        Vector direction = target.getEyeLocation().toVector().subtract(boss.getEyeLocation().toVector()).normalize().multiply(speed);
+        projectile.setVelocity(direction);
     }
 
     private void createTemporaryBlocks(Location center) {
@@ -268,7 +374,10 @@ public class BossManager {
     }
 
     private void rewardParticipants() {
-        int coins = plugin.getConfig().getInt("rewards.money", 50);
+        BossType type = activeBoss.bossType;
+        int minCoins = plugin.getConfig().getInt("bosses." + type.id() + ".reward-coins-min", 50);
+        int maxCoins = plugin.getConfig().getInt("bosses." + type.id() + ".reward-coins-max", 50);
+        int coins = ThreadLocalRandom.current().nextInt(minCoins, maxCoins + 1);
         for (UUID participant : activeBoss.participants) {
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "money add " + Bukkit.getOfflinePlayer(participant).getName() + " " + coins);
             pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).addAll(buildLoot(activeBoss.bossType));
@@ -353,6 +462,7 @@ public class BossManager {
                 } catch (IllegalArgumentException ignored) {
                 }
             }
+            pendingClaims.computeIfAbsent(participant, k -> new ArrayList<>()).addAll(buildLoot(type));
         }
 
         Map<String, String> unique = new HashMap<>();
@@ -386,25 +496,50 @@ public class BossManager {
         return entries.get(entries.size() - 1);
     }
 
-    private void applyMetadata(ItemStack item, LootEntry entry) {
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null) return;
+    private List<ItemStack> buildLoot(BossType type) {
+        List<ItemStack> drops = new ArrayList<>();
+        drops.add(new ItemStack(type.lootMaterial(), 1));
 
-        if (entry.displayName() != null) {
-            meta.setDisplayName(entry.displayName());
-        }
-        if (!entry.lore().isEmpty()) {
-            meta.setLore(entry.lore());
-        }
-        if (!entry.flags().isEmpty()) {
-            meta.addItemFlags(entry.flags().toArray(new ItemFlag[0]));
-        }
-        for (Map.Entry<String, String> flag : entry.unique().entrySet()) {
-            NamespacedKey key = new NamespacedKey(plugin, "loot_" + flag.getKey().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_"));
-            meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, flag.getValue());
+        switch (type) {
+            case ZOMBIE_GIANT -> {
+                drops.add(new ItemStack(Material.POTION, 3));
+                drops.add(new ItemStack(Material.GOLDEN_APPLE, 3));
+            }
+            case IFRIT_TITAN -> {
+                drops.add(new ItemStack(Material.BLAZE_ROD, ThreadLocalRandom.current().nextInt(15, 21)));
+                drops.add(new ItemStack(Material.POTION, 1));
+            }
+            case GIANT_PHANTOM -> drops.add(new ItemStack(Material.PHANTOM_MEMBRANE, 2));
+            case GIANT_SHULKER -> drops.add(new ItemStack(Material.SHULKER_SHELL, ThreadLocalRandom.current().nextInt(1, 4)));
+            case FOREST_GUARDIAN -> {
+                drops.add(new ItemStack(Material.EMERALD, ThreadLocalRandom.current().nextInt(30, 51)));
+                drops.add(new ItemStack(Material.IRON_INGOT, ThreadLocalRandom.current().nextInt(20, 31)));
+            }
+            default -> {
+            }
         }
 
-        item.setItemMeta(meta);
+        if (type == BossType.ZOMBIE_GIANT && ThreadLocalRandom.current().nextDouble() < 0.2) {
+            ItemStack head = new ItemStack(Material.ZOMBIE_HEAD, 1);
+            ItemMeta meta = head.getItemMeta();
+            meta.displayName(Component.text("Голова зомби-гиганта", NamedTextColor.DARK_GREEN));
+            head.setItemMeta(meta);
+            drops.add(head);
+        }
+
+        if (type == BossType.GIANT_PHANTOM && ThreadLocalRandom.current().nextDouble() < 0.2) {
+            drops.add(new ItemStack(Material.ELYTRA, 1));
+        }
+
+        if (type == BossType.GIANT_SHULKER) {
+            ItemStack shard = new ItemStack(Material.AMETHYST_SHARD, 1);
+            ItemMeta meta = shard.getItemMeta();
+            meta.displayName(Component.text("Гравитационный осколок", NamedTextColor.LIGHT_PURPLE));
+            shard.setItemMeta(meta);
+            drops.add(shard);
+        }
+
+        return drops;
     }
 
     private void publishDamageTop() {
@@ -475,7 +610,7 @@ public class BossManager {
     }
 
     private BossType nextBossType() {
-        String configured = plugin.getConfig().getString("bosses.next-type", "zombie");
+        String configured = plugin.getConfig().getString("bosses.next-type", "zombie_giant");
         return BossType.fromId(configured);
     }
 
@@ -656,7 +791,7 @@ public class BossManager {
             try {
                 ActiveBoss restored = new ActiveBoss();
                 restored.entityId = UUID.fromString(state.getString("active.entity-id"));
-                restored.bossType = BossType.fromId(state.getString("active.type", "zombie"));
+                restored.bossType = BossType.fromId(state.getString("active.type", "zombie_giant"));
                 restored.spawnLocation = state.getLocation("active.spawn");
                 restored.spawnedAt = state.getLong("active.spawned-at", System.currentTimeMillis());
                 restored.despawnAt = state.getLong("active.despawn-at", System.currentTimeMillis());
